@@ -25,7 +25,7 @@ jobs:
       - name: Build binary
         run: |
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
-          go build -o bin/modpilot-${{ matrix.goos }}-${{ matrix.goarch }} main.go
+          go build -o bin/modpilot-${{ matrix.goos }}-${{ matrix.goarch }}
 
       - name: Archive binary
         run: |
