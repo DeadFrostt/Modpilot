@@ -132,7 +132,3 @@ By default, JARs are downloaded to `<mods-dir>/<pack>/`. Override with `--mods-d
 ## Contributing
 
 Contributions welcome! Open issues or submit pull requests on GitHub.
-
-## License
-
-MIT © Your Name
