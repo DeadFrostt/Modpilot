@@ -1,6 +1,6 @@
-# modpm
+# modpilot
 
-**modpm** is a lightweight Modrinth modpack manager written in Go. It allows you to define modpacks as collections of Modrinth slugs in a JSON config, then add, remove, update, and sync mods via a simple CLI.
+**modpilot** is a lightweight Modrinth modpack manager written in Go. It allows you to define modpacks as collections of Modrinth slugs in a JSON config, then add, remove, update, and sync mods via a simple CLI.
 
 ## Features
 
@@ -25,9 +25,9 @@
 Clone the repo and build:
 
 ```pwsh
-git clone https://github.com/yourusername/modpackerr.git
-cd modpackerr
-go build -o modpm.exe main.go
+git clone https://github.com/yourusername/modpilot.git
+cd modpilot
+go build -o modpilot.exe main.go
 ```
 
 Or download the latest release for Windows.
@@ -36,39 +36,39 @@ Or download the latest release for Windows.
 
 1. Initialize your workspace:
    ```pwsh
-   .\modpm.exe init -c config.json -s state.json
+   .\modpilot.exe init -c config.json -s state.json
    ```
    This prompts for default Minecraft version and loader, and creates `config.json` and `state.json` if missing.
 
 2. Create a new modpack:
    ```pwsh
-   .\modpm.exe create-pack TechPack
+   .\modpilot.exe create-pack TechPack
    ```
 
 3. Add mods:
    ```pwsh
-   .\modpm.exe add-mod TechPack ae2 thermal-foundation
+   .\modpilot.exe add-mod TechPack ae2 thermal-foundation
    ```
 
 4. List modpacks and mods:
    ```pwsh
-   .\modpm.exe list-packs
-   .\modpm.exe list-mods TechPack
+   .\modpilot.exe list-packs
+   .\modpilot.exe list-mods TechPack
    ```
 
 5. Check for updates and download:
    ```pwsh
-   .\modpm.exe update TechPack --yes --verbose
+   .\modpilot.exe update TechPack --yes --verbose
    ```
 
 6. Show status without downloading:
    ```pwsh
-   .\modpm.exe status TechPack
+   .\modpilot.exe status TechPack
    ```
 
 7. Sync local mods folder (remove extra jars):
    ```pwsh
-   .\modpm.exe sync TechPack --verbose
+   .\modpilot.exe sync TechPack --verbose
    ```
 
 ## Commands
@@ -78,15 +78,15 @@ Or download the latest release for Windows.
 | init                      | Initialize or update config/state interactively  |
 | create-pack [name]        | Create a new modpack                            |
 | delete-pack [name]        | Remove a modpack                                |
-| list-packs                | List all modpack names                           |
-| list-mods [pack]          | List all mods in a modpack                       |
+| list-packs (lp)           | List all modpack names                           |
+| list-mods [pack] (lm)     | List all mods in a modpack                       |
 | add-mod [pack] [slugs...] | Add one or more Modrinth slugs to a modpack      |
 | remove-mod [pack] [slugs...] | Remove one or more slugs from a modpack        |
 | set-mc [version]          | Set default Minecraft version in `config.json`   |
 | set-loader [loader]       | Set default mod loader (fabric/forge/...)        |
-| update [pack]             | Check & download new versions for a modpack      |
+| update [pack] (upd)       | Check & download new versions for a modpack      |
 | status [pack]             | Display status of mods (up-to-date/outdated)     |
-| sync [pack]               | Remove JARs not listed in the modpack config     |
+| sync [pack] (clean)       | Remove JARs not listed in the modpack config     |
 
 Use `-c`, `-s`, `-m`, `-y`, `-g`, `-l`, and `-v` flags for config path, state path, mods directory, yes (auto-confirm), MC version override, loader override, and verbose output, respectively.
 
@@ -132,3 +132,21 @@ Contributions welcome! Feel free to open issues or submit pull requests.
 ## License
 
 MIT © Your Name
+
+---
+
+Updated 2025-04-27
+
+## Quality of Life Improvements
+
+- Aliases for most commands to speed up typing
+- Precise version filtering: now the tool only downloads mods whose `game_versions` and `loaders` lists match your chosen Minecraft version/loader. Falls back to the closest match or errors if none found.
+- Correct destDir usage for downloads so files are always placed under `<mods-dir>/<pack>/`.
+
+### Aliases
+
+- `modpilot` (alias `modpm`, `mp`)
+- `update` (alias `update-pack`, `upd`)
+- `list-packs` (alias `lp`)
+- `list-mods` (alias `lm`)
+- `sync` (alias `sync-pack`, `clean`)

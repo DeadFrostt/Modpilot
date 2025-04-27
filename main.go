@@ -4,7 +4,6 @@ import (
     "bufio"
     "fmt"
     "io/ioutil"
-    "log"
     "os"
     "path/filepath"
     "strings"
@@ -30,9 +29,10 @@ var (
 
 func main() {
     root := &cobra.Command{
-        Use:   "modpm",
-        Short: "modpm — a Modrinth modpack manager",
-        Long:  "Define modpack “stacks” in config.json, then list, add, remove, or update mods via the CLI.",
+        Use:     "modpilot",
+        Aliases: []string{"modpm", "mp"},
+        Short:   "modpilot — a Modrinth modpack manager",
+        Long:    "Define modpack “stacks” in config.json, then list, add, remove, or update mods via the CLI.",
     }
 
     // Global flags
@@ -46,8 +46,9 @@ func main() {
 
     // list-packs
     listPacks := &cobra.Command{
-        Use:   "list-packs",
-        Short: "List all defined modpacks",
+        Use:     "list-packs",
+        Aliases: []string{"lp"},
+        Short:   "List all defined modpacks",
         RunE: func(cmd *cobra.Command, args []string) error {
             cfg, err := LoadConfig(cfgFile)
             if err != nil {
@@ -63,9 +64,10 @@ func main() {
 
     // list-mods
     listMods := &cobra.Command{
-        Use:   "list-mods [modpack]",
-        Short: "List all mods in a modpack",
-        Args:  cobra.ExactArgs(1),
+        Use:     "list-mods [modpack]",
+        Aliases: []string{"lm"},
+        Short:   "List all mods in a modpack",
+        Args:    cobra.ExactArgs(1),
         RunE: func(cmd *cobra.Command, args []string) error {
             pack := args[0]
             cfg, err := LoadConfig(cfgFile)
@@ -303,9 +305,10 @@ func main() {
 
     // update
     update := &cobra.Command{
-        Use:   "update [modpack]",
-        Short: "Check & download new versions for a modpack",
-        Args:  cobra.ExactArgs(1),
+        Use:     "update [modpack]",
+        Aliases: []string{"update-pack", "upd"},
+        Short:   "Check & download new versions for a modpack",
+        Args:    cobra.ExactArgs(1),
         RunE: func(cmd *cobra.Command, args []string) error {
             pack := args[0]
             cfg, err := LoadConfig(cfgFile)
@@ -367,7 +370,7 @@ func main() {
                     fmt.Printf("    ✗ mkdir failed: %v\n", err)
                     continue
                 }
-                outPath, err := DownloadFile(ver.Files[0].URL, fmt.Sprintf("%s/%s", modsDir, pack))
+                outPath, err := DownloadFile(ver.Files[0].URL, destDir)
                 if err != nil {
                     fmt.Printf("    ✗ download failed: %v\n", err)
                     continue
@@ -426,9 +429,10 @@ func main() {
 
     // sync
     syncCmd := &cobra.Command{
-        Use:   "sync [modpack]",
-        Short: "Remove jars not listed in the modpack config",
-        Args:  cobra.ExactArgs(1),
+        Use:     "sync [modpack]",
+        Aliases: []string{"sync-pack", "clean"},
+        Short:   "Remove jars not listed in the modpack config",
+        Args:    cobra.ExactArgs(1),
         RunE: func(cmd *cobra.Command, args []string) error {
             pack := args[0]
             cfg, err := LoadConfig(cfgFile)

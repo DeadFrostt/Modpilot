@@ -10,7 +10,9 @@ import (
 )
 
 type Version struct {
-    ID    string `json:"id"`
+    ID           string   `json:"id"`
+    GameVersions []string `json:"game_versions"`
+    Loaders      []string `json:"loaders"`
     Files []struct {
         URL      string `json:"url"`
         Filename string `json:"filename"`
@@ -36,7 +38,25 @@ func FetchLatestVersion(slug, mcVersion, loader string) (*Version, error) {
     if len(versions) == 0 {
         return nil, fmt.Errorf("no versions found for %s", slug)
     }
-    return &versions[0], nil
+    // find first version whose game_versions includes mcVersion and loaders includes loader
+    for _, v := range versions {
+        okGV := false
+        for _, gv := range v.GameVersions {
+            if gv == mcVersion {
+                okGV = true
+                break
+            }
+        }
+        if !okGV {
+            continue
+        }
+        for _, ld := range v.Loaders {
+            if ld == loader {
+                return &v, nil
+            }
+        }
+    }
+    return nil, fmt.Errorf("no compatible version found for %s (MC %s, loader %s)", slug, mcVersion, loader)
 }
 
 // DownloadFile streams the URL to destDir/<filename>
