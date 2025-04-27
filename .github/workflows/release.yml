@@ -22,10 +22,14 @@ jobs:
         with:
           go-version: '^1.18'
 
+      - name: Download Go modules
+        run: go mod download
+
       - name: Build binary
         run: |
+          mkdir -p bin # Explicitly create the output directory
           GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
-          go build -o bin/modpilot-${{ matrix.goos }}-${{ matrix.goarch }} .
+          go build -v -o bin/modpilot-${{ matrix.goos }}-${{ matrix.goarch }} . # Add -v for verbose output
 
       - name: Archive binary
         run: |
