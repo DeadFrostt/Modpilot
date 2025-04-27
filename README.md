@@ -1,6 +1,6 @@
-# modpm
+# Modpilot
 
-**modpm** is a lightweight Modrinth modpack manager written in Go. It allows you to define modpacks as collections of Modrinth slugs in a JSON config, then add, remove, update, and sync mods via a simple CLI.
+**Modpilot** is a lightweight Modrinth modpack manager written in Go. It allows you to define modpacks as collections of Modrinth slugs in a JSON config, then add, remove, update, and sync mods via a simple CLI.
 
 ## Features
 
@@ -27,7 +27,7 @@ Clone the repo and build:
 ```pwsh
 git clone https://github.com/yourusername/modpackerr.git
 cd modpackerr
-go build -o modpm.exe main.go
+go build -o modpilot.exe main.go
 ```
 
 Or download the latest release for Windows.
@@ -36,39 +36,39 @@ Or download the latest release for Windows.
 
 1. Initialize your workspace:
    ```pwsh
-   .\modpm.exe init -c config.json -s state.json
+   .\modpilot.exe init -c config.json -s state.json
    ```
    This prompts for default Minecraft version and loader, and creates `config.json` and `state.json` if missing.
 
 2. Create a new modpack:
    ```pwsh
-   .\modpm.exe create-pack TechPack
+   .\modpilot.exe create-pack TechPack
    ```
 
 3. Add mods:
    ```pwsh
-   .\modpm.exe add-mod TechPack ae2 thermal-foundation
+   .\modpilot.exe add-mod TechPack ae2 thermal-foundation
    ```
 
 4. List modpacks and mods:
    ```pwsh
-   .\modpm.exe list-packs
-   .\modpm.exe list-mods TechPack
+   .\modpilot.exe list-packs
+   .\modpilot.exe list-mods TechPack
    ```
 
 5. Check for updates and download:
    ```pwsh
-   .\modpm.exe update TechPack --yes --verbose
+   .\modpilot.exe update TechPack --yes --verbose
    ```
 
 6. Show status without downloading:
    ```pwsh
-   .\modpm.exe status TechPack
+   .\modpilot.exe status TechPack
    ```
 
 7. Sync local mods folder (remove extra jars):
    ```pwsh
-   .\modpm.exe sync TechPack --verbose
+   .\modpilot.exe sync TechPack --verbose
    ```
 
 ## Commands
