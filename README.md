@@ -1,6 +1,6 @@
 # Modpilot
 
-**Modpilot** (alias `modpm`, `mp`) is a lightweight Modrinth modpack manager written in Go. Define modpacks as collections of Modrinth slugs in a JSON config, then add, remove, update, and sync mods via a simple CLI.
+**Modpilot** is a lightweight Modrinth modpack manager written in Go. Define modpacks as collections of Modrinth slugs in a JSON config, then add, remove, update, and sync mods via a simple CLI.
 
 ## Features
 
@@ -132,7 +132,3 @@ By default, JARs are downloaded to `<mods-dir>/<pack>/`. Override with `--mods-d
 ## Contributing
 
 Contributions welcome! Open issues or submit pull requests on GitHub.
-
-## License
-
-MIT © Your Name
