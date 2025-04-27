@@ -1,6 +1,6 @@
-# modpilot
+# modpm
 
-**modpilot** is a lightweight Modrinth modpack manager written in Go. It allows you to define modpacks as collections of Modrinth slugs in a JSON config, then add, remove, update, and sync mods via a simple CLI.
+**modpm** is a lightweight Modrinth modpack manager written in Go. It allows you to define modpacks as collections of Modrinth slugs in a JSON config, then add, remove, update, and sync mods via a simple CLI.
 
 ## Features
 
@@ -25,9 +25,9 @@
 Clone the repo and build:
 
 ```pwsh
-git clone https://github.com/yourusername/modpilot.git
-cd modpilot
-go build -o modpilot.exe main.go
+git clone https://github.com/yourusername/modpackerr.git
+cd modpackerr
+go build -o modpm.exe main.go
 ```
 
 Or download the latest release for Windows.
