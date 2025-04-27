@@ -6,10 +6,20 @@ import (
     "os"
 )
 
+// ModpackConfig holds settings specific to a single modpack
+type ModpackConfig struct {
+	MCVersion string   `json:"mc_version"`
+	Loader    string   `json:"loader"`
+	Mods      []string `json:"mods"`
+}
+
 type Config struct {
-    MCVersion string              `json:"mc_version"`
-    Loader    string              `json:"loader"`
-    Modpacks  map[string][]string `json:"modpacks"`
+	// Optional global defaults for new packs
+	DefaultMCVersion string `json:"default_mc_version,omitempty"`
+	DefaultLoader    string `json:"default_loader,omitempty"`
+
+	// Modpacks maps pack name to its specific configuration
+	Modpacks map[string]ModpackConfig `json:"modpacks"`
 }
 
 // State keeps track of last-downloaded version IDs
