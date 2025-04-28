@@ -287,9 +287,6 @@ func main() {
 			return nil
 		},
 	}
-
-	// REMOVED set-mc and set-loader commands as they are now per-pack
-
 	// init
 	initCmd := &cobra.Command{
 		Use:   "init",
@@ -400,7 +397,6 @@ func main() {
 				}
 
 				// Determine reason for action
-				// downloadReason := "" // "new", "version-update", "missing-file" // Not strictly needed now
 				promptMessage := ""
 				needsDownload := false
 
@@ -449,7 +445,6 @@ func main() {
 					}
 					if err := os.Remove(expectedFilePath); err != nil {
 						fmt.Printf("    ✗ Failed to remove old file: %v\n", err)
-						// Continue anyway, maybe download will overwrite or fail
 					}
 				}
 
@@ -650,8 +645,6 @@ func main() {
 		removeMod,
 		createPack,
 		deletePack,
-		// setMC, // Removed
-		// setLoader, // Removed
 		initCmd,
 		update,
 		checkUpdatesCmd,
