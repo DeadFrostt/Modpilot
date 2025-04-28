@@ -167,6 +167,29 @@ func main() {
 				if err := SaveConfig(cfgFile, cfg); err != nil {
 					return err
 				}
+
+				// Also remove from state
+				state, err := LoadState(stateFile)
+				if err != nil {
+					// Warn but don't fail the whole operation if state load fails
+					fmt.Printf("Warning: could not load state file to remove mod entries: %v\n", err)
+				} else if packState, ok := state[packName]; ok {
+					stateChanged := false
+					for _, slug := range rem {
+						if _, exists := packState[slug]; exists {
+							delete(packState, slug)
+							stateChanged = true
+							if verbose {
+								fmt.Printf("Removed %q from state for %s\n", slug, packName)
+							}
+						}
+					}
+					if stateChanged {
+						if err := SaveState(stateFile, state); err != nil {
+							fmt.Printf("Warning: could not save updated state file: %v\n", err)
+						}
+					}
+				}
 			}
 			return nil
 		},
@@ -347,62 +370,110 @@ func main() {
 				return err
 			}
 			if state[packName] == nil {
-				state[packName] = make(map[string]string)
+				state[packName] = make(map[string]ModState)
 			}
 			reader := bufio.NewReader(os.Stdin)
+			packState := state[packName]
+			needsSave := false
 
 			for _, slug := range packCfg.Mods {
 				fmt.Printf("\nChecking %s for %s/%s…\n", slug, gameVersion, loader)
+
+				modState, modInState := packState[slug]
+				fileExists := false
+				destDir := filepath.Join(modsDir, packName)
+				if modInState && modState.Filename != "" {
+					filePath := filepath.Join(destDir, modState.Filename)
+					if _, err := os.Stat(filePath); err == nil {
+						fileExists = true
+					} else if !os.IsNotExist(err) {
+						// Error checking file stat other than not existing
+						fmt.Printf("  ✗ error checking file %s: %v\n", filePath, err)
+					}
+				}
+
+				if !fileExists {
+					fmt.Println("  ! Mod file not found locally.")
+				}
+
 				ver, err := FetchLatestVersion(slug, gameVersion, loader)
 				if err != nil {
 					fmt.Printf("  ✗ fetch error: %v\n", err)
 					continue
 				}
-				last := state[packName][slug]
-				if ver.ID == last {
-					fmt.Printf("  ✓ up to date (%s)\n", ver.ID)
-					continue
+
+				// Determine if update is needed
+				needsUpdate := false
+				if !modInState {
+					fmt.Println("  + New mod, downloading.")
+					needsUpdate = true
+				} else if ver.ID != modState.VersionID {
+					fmt.Printf("  ⚠ Version update available: %s → %s\n", modState.VersionID, ver.ID)
+					needsUpdate = true
+				} else if !fileExists {
+					fmt.Printf("  ! File missing, redownloading version %s\n", ver.ID)
+					needsUpdate = true
+				} else {
+					fmt.Printf("  ✓ Up to date (%s)\n", ver.ID)
+					continue // Skip to next mod
 				}
-				fmt.Printf("  ⚠ %s → %s\n", last, ver.ID)
-				if !autoYes {
-					fmt.Print("    Update? (y/N) ")
-					yn, _ := reader.ReadString('\n')
-					yn = strings.TrimSpace(strings.ToLower(yn))
-					if yn != "y" {
-						fmt.Println("    skipped.")
+
+				if needsUpdate {
+					if !autoYes {
+						fmt.Print("    Download/Update? (y/N) ")
+						yn, _ := reader.ReadString('\n')
+						yn = strings.TrimSpace(strings.ToLower(yn))
+						if yn != "y" {
+							fmt.Println("    skipped.")
+							continue
+						}
+					}
+
+					// Remove old file if it exists and we are updating
+					if fileExists && modState.Filename != "" && modState.Filename != ver.Files[0].Filename {
+						oldPath := filepath.Join(destDir, modState.Filename)
+						if verbose {
+							fmt.Printf("    Removing old file: %s\n", oldPath)
+						}
+						if err := os.Remove(oldPath); err != nil {
+							fmt.Printf("    ✗ Failed to remove old file: %v\n", err)
+							// Continue anyway, maybe download will overwrite or fail
+						}
+					}
+
+					if verbose {
+						fmt.Printf("    Ensuring directory %s exists\n", destDir)
+					}
+					if err := os.MkdirAll(destDir, os.ModePerm); err != nil {
+						fmt.Printf("    ✗ mkdir failed: %v\n", err)
 						continue
 					}
+					outPath, err := DownloadFile(ver.Files[0].URL, destDir)
+					if err != nil {
+						fmt.Printf("    ✗ download failed: %v\n", err)
+						continue
+					}
+					fmt.Printf("    ✓ downloaded to %s\n", outPath)
+					// Update state with new version ID and filename
+					packState[slug] = ModState{VersionID: ver.ID, Filename: filepath.Base(outPath)}
+					needsSave = true
 				}
-				// ensure mods directory exists
-				destDir := filepath.Join(modsDir, packName)
-				if verbose {
-					fmt.Printf("Ensuring directory %s exists\n", destDir)
-				}
-				if err := os.MkdirAll(destDir, os.ModePerm); err != nil {
-					fmt.Printf("    ✗ mkdir failed: %v\n", err)
-					continue
-				}
-				outPath, err := DownloadFile(ver.Files[0].URL, destDir)
-				if err != nil {
-					fmt.Printf("    ✗ download failed: %v\n", err)
-					continue
-				}
-				fmt.Printf("    ✓ downloaded to %s\n", outPath)
-				state[packName][slug] = ver.ID
 			}
 
-			if err := SaveState(stateFile, state); err != nil {
-				return err
+			if needsSave {
+				if err := SaveState(stateFile, state); err != nil {
+					return err
+				}
 			}
-			fmt.Println("\nUpdate complete.")
+			fmt.Println("\nUpdate check complete.")
 			return nil
 		},
 	}
 
-	// status
-	statusCmd := &cobra.Command{
-		Use:   "status [modpack]",
-		Short: "Display up-to-date/outdated status for a modpack",
+	// check-updates
+	checkUpdatesCmd := &cobra.Command{
+		Use:   "check-updates [modpack]", // Renamed from "status"
+		Short: "Check Modrinth for newer versions of mods in a modpack", // Updated description
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			packName := args[0]
@@ -419,7 +490,7 @@ func main() {
 				return err
 			}
 			if state[packName] == nil {
-				state[packName] = make(map[string]string)
+				state[packName] = make(map[string]ModState)
 			}
 
 			// Use pack-specific version and loader
@@ -433,19 +504,53 @@ func main() {
 				loader = loaderFlag
 			}
 
+			fmt.Printf("Checking for updates in %s (MC: %s, Loader: %s):\n", packName, gameVersion, loader)
+			updatesFound := 0
+			missingFiles := 0
+			packState := state[packName]
+			destDir := filepath.Join(modsDir, packName)
+
 			for _, slug := range packCfg.Mods {
-				fmt.Printf("\n[%s] checking %s...\n", packName, slug)
+				modState, modInState := packState[slug]
+				fileExists := false
+				if modInState && modState.Filename != "" {
+					filePath := filepath.Join(destDir, modState.Filename)
+					if _, err := os.Stat(filePath); err == nil {
+						fileExists = true
+					} else if !os.IsNotExist(err) {
+						fmt.Printf("  ! %s: error checking file %s: %v\n", slug, filePath, err)
+					}
+				}
+
 				ver, err := FetchLatestVersion(slug, gameVersion, loader)
 				if err != nil {
-					fmt.Printf("  ✗ error: %v\n", err)
+					fmt.Printf("  ✗ %s: error fetching version: %v\n", slug, err)
 					continue
 				}
-				last := state[packName][slug]
-				if ver.ID == last {
-					fmt.Printf("  ✓ up to date (%s)\n", ver.ID)
+
+				if !modInState {
+					fmt.Printf("  + %s: new mod, latest version is %s\n", slug, ver.ID)
+					updatesFound++ // Count as needing update
+				} else if ver.ID != modState.VersionID {
+					fmt.Printf("  ⚠ %s: outdated: %s → %s%s\n", slug, modState.VersionID, ver.ID, ternary(fileExists, "", " (file missing!)"))
+					updatesFound++
+					if !fileExists {
+						missingFiles++
+					}
+				} else if !fileExists {
+					fmt.Printf("  ! %s: file missing for current version %s\n", slug, ver.ID)
+					missingFiles++
+					updatesFound++ // Count as needing update because file is missing
 				} else {
-					fmt.Printf("  ⚠ outdated: %s → %s\n", last, ver.ID)
+					if verbose {
+						fmt.Printf("  ✓ %s: up to date (%s)\n", slug, ver.ID)
+					}
 				}
+			}
+			if updatesFound == 0 && missingFiles == 0 {
+				fmt.Println("\nAll mods are up to date and present.")
+			} else {
+				fmt.Printf("\nFound %d potential update(s) and %d missing file(s). Run 'modpilot update %s' to fix.\n", updatesFound, missingFiles, packName)
 			}
 			return nil
 		},
@@ -455,18 +560,22 @@ func main() {
 	syncCmd := &cobra.Command{
 		Use:     "sync [modpack]",
 		Aliases: []string{"sync-pack", "clean"},
-		Short:   "Remove jars not listed in the modpack config",
+		Short:   "Remove mod jars not listed in the state file for the modpack", // Updated description
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			packName := args[0]
-			cfg, err := LoadConfig(cfgFile)
+			// No need to load config for sync, only state
+			state, err := LoadState(stateFile)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to load state for sync: %w", err)
 			}
-			packCfg, ok := cfg.Modpacks[packName]
+			packState, ok := state[packName]
 			if !ok {
-				return fmt.Errorf("modpack %q not found", packName)
+				fmt.Printf("No state found for modpack %q, nothing to sync against.\n", packName)
+				// Check if the directory exists anyway, maybe it needs cleaning from a previous run
+				packState = make(map[string]ModState) // Treat as empty state
 			}
+
 			dir := filepath.Join(modsDir, packName)
 			files, err := ioutil.ReadDir(dir)
 			if err != nil {
@@ -474,44 +583,27 @@ func main() {
 					fmt.Printf("Mods directory for %s (%s) does not exist, nothing to sync.\n", packName, dir)
 					return nil // Not an error if dir doesn't exist
 				}
-				return err
+				return fmt.Errorf("failed to read mods directory %s: %w", dir, err)
 			}
 
-			// Build a map of expected filenames based on state
-			// state, err := LoadState(stateFile) // Keep state loading commented/removed if not used
-			// if err != nil {
-			// 	return fmt.Errorf("failed to load state for sync: %w", err)
-			// }
-			// packState, ok := state[packName] // REMOVED - declared and not used
-			// if !ok {
-			// 	packState = make(map[string]string) // Handle case where pack has no state yet
-			// }
-
-			// Build map of slugs defined in config for this pack
-			configSlugs := make(map[string]bool)
-			for _, slug := range packCfg.Mods {
-				configSlugs[slug] = true
+			// Build a map of expected filenames from the state
+			expectedFiles := make(map[string]bool)
+			for _, modState := range packState {
+				if modState.Filename != "" {
+					expectedFiles[modState.Filename] = true
+				}
 			}
 
 			// Iterate through files in the directory
 			removedCount := 0
 			for _, f := range files {
-				if f.IsDir() {
-					continue // Skip directories
-				}
-				// Simplistic check: Does the filename contain any known slug?
-				// This is NOT robust. A better way would be to store filename in state.
-				keepFile := false
-				for slug := range configSlugs {
-					if strings.Contains(strings.ToLower(f.Name()), strings.ToLower(slug)) {
-						keepFile = true
-						break
-					}
+				if f.IsDir() || !strings.HasSuffix(strings.ToLower(f.Name()), ".jar") {
+					continue // Skip directories and non-jar files
 				}
 
-				if !keepFile {
+				if !expectedFiles[f.Name()] {
 					filePath := filepath.Join(dir, f.Name())
-					fmt.Printf("Removing %s (not found in %s config)...\n", filePath, packName)
+					fmt.Printf("Removing %s (not found in state for %s)...\n", filePath, packName)
 					if err := os.Remove(filePath); err != nil {
 						fmt.Printf("  ✗ Failed to remove: %v\n", err)
 					} else {
@@ -520,9 +612,9 @@ func main() {
 				}
 			}
 			if removedCount > 0 {
-				fmt.Printf("Sync complete. Removed %d file(s).\n", removedCount)
+				fmt.Printf("Sync complete. Removed %d unexpected file(s).\n", removedCount)
 			} else {
-				fmt.Println("Sync complete. No files removed.")
+				fmt.Println("Sync complete. No unexpected files found.")
 			}
 			return nil
 		},
@@ -539,7 +631,7 @@ func main() {
 		// setLoader, // Removed
 		initCmd,
 		update,
-		statusCmd,
+		checkUpdatesCmd,
 		syncCmd,
 	)
 
@@ -547,4 +639,12 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+// Helper for conditional printing in check-updates
+func ternary(condition bool, trueVal, falseVal string) string {
+	if condition {
+		return trueVal
+	}
+	return falseVal
 }
