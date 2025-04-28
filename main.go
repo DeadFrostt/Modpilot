@@ -377,88 +377,111 @@ func main() {
 			needsSave := false
 
 			for _, slug := range packCfg.Mods {
-				fmt.Printf("\nChecking %s for %s/%s…\n", slug, gameVersion, loader)
+				fmt.Printf("\nChecking %s...\n", slug) // Simplified initial message
 
 				modState, modInState := packState[slug]
 				fileExists := false
 				destDir := filepath.Join(modsDir, packName)
+				expectedFilePath := ""
 				if modInState && modState.Filename != "" {
-					filePath := filepath.Join(destDir, modState.Filename)
-					if _, err := os.Stat(filePath); err == nil {
+					expectedFilePath = filepath.Join(destDir, modState.Filename)
+					if _, err := os.Stat(expectedFilePath); err == nil {
 						fileExists = true
 					} else if !os.IsNotExist(err) {
-						// Error checking file stat other than not existing
-						fmt.Printf("  ✗ error checking file %s: %v\n", filePath, err)
+						fmt.Printf("  ✗ Error checking file %s: %v\n", expectedFilePath, err)
+						// Decide whether to continue or skip based on error? For now, continue.
 					}
-				}
-
-				if !fileExists {
-					fmt.Println("  ! Mod file not found locally.")
 				}
 
 				ver, err := FetchLatestVersion(slug, gameVersion, loader)
 				if err != nil {
-					fmt.Printf("  ✗ fetch error: %v\n", err)
+					fmt.Printf("  ✗ Error fetching latest version: %v\n", err)
 					continue
 				}
 
-				// Determine if update is needed
-				needsUpdate := false
+				// Determine reason for action
+				// downloadReason := "" // "new", "version-update", "missing-file" // Not strictly needed now
+				promptMessage := ""
+				needsDownload := false
+
 				if !modInState {
-					fmt.Println("  + New mod, downloading.")
-					needsUpdate = true
+					needsDownload = true
+					promptMessage = fmt.Sprintf("  + New mod found: %s (Version: %s). Download?", slug, ver.ID)
 				} else if ver.ID != modState.VersionID {
-					fmt.Printf("  ⚠ Version update available: %s → %s\n", modState.VersionID, ver.ID)
-					needsUpdate = true
+					needsDownload = true
+					promptMessage = fmt.Sprintf("  ⚠ Update available: %s (%s -> %s). Update?", slug, modState.VersionID, ver.ID)
 				} else if !fileExists {
-					fmt.Printf("  ! File missing, redownloading version %s\n", ver.ID)
-					needsUpdate = true
+					needsDownload = true
+					// Slightly different message if filename was known vs unknown (old state format)
+					if modState.Filename != "" {
+						promptMessage = fmt.Sprintf("  ! File missing: %s (Version: %s). Redownload?", slug, ver.ID)
+					} else {
+						promptMessage = fmt.Sprintf("  ! File needed: %s (Version: %s). Download?", slug, ver.ID)
+					}
 				} else {
+					// Up to date and file exists
 					fmt.Printf("  ✓ Up to date (%s)\n", ver.ID)
 					continue // Skip to next mod
 				}
 
-				if needsUpdate {
-					if !autoYes {
-						fmt.Print("    Download/Update? (y/N) ")
-						yn, _ := reader.ReadString('\n')
-						yn = strings.TrimSpace(strings.ToLower(yn))
-						if yn != "y" {
-							fmt.Println("    skipped.")
-							continue
-						}
+				// Ask user if needed
+				proceed := autoYes
+				if needsDownload && !proceed { // Only prompt if a download is actually needed
+					fmt.Print(promptMessage + " (y/N) ")
+					yn, _ := reader.ReadString('\n')
+					yn = strings.TrimSpace(strings.ToLower(yn))
+					if yn == "y" {
+						proceed = true
 					}
-
-					// Remove old file if it exists and we are updating
-					if fileExists && modState.Filename != "" && modState.Filename != ver.Files[0].Filename {
-						oldPath := filepath.Join(destDir, modState.Filename)
-						if verbose {
-							fmt.Printf("    Removing old file: %s\n", oldPath)
-						}
-						if err := os.Remove(oldPath); err != nil {
-							fmt.Printf("    ✗ Failed to remove old file: %v\n", err)
-							// Continue anyway, maybe download will overwrite or fail
-						}
-					}
-
-					if verbose {
-						fmt.Printf("    Ensuring directory %s exists\n", destDir)
-					}
-					if err := os.MkdirAll(destDir, os.ModePerm); err != nil {
-						fmt.Printf("    ✗ mkdir failed: %v\n", err)
-						continue
-					}
-					outPath, err := DownloadFile(ver.Files[0].URL, destDir)
-					if err != nil {
-						fmt.Printf("    ✗ download failed: %v\n", err)
-						continue
-					}
-					fmt.Printf("    ✓ downloaded to %s\n", outPath)
-					// Update state with new version ID and filename
-					packState[slug] = ModState{VersionID: ver.ID, Filename: filepath.Base(outPath)}
-					needsSave = true
 				}
-			}
+
+				if !proceed {
+					fmt.Println("    Skipped.")
+					continue
+				}
+
+				// --- Perform Download --- 
+
+				// Remove old file ONLY if it exists AND the new filename is different
+				if fileExists && expectedFilePath != "" && modState.Filename != ver.Files[0].Filename {
+					if verbose {
+						fmt.Printf("    Removing old file: %s\n", expectedFilePath)
+					}
+					if err := os.Remove(expectedFilePath); err != nil {
+						fmt.Printf("    ✗ Failed to remove old file: %v\n", err)
+						// Continue anyway, maybe download will overwrite or fail
+					}
+				}
+
+				if verbose {
+					fmt.Printf("    Ensuring directory %s exists\n", destDir)
+				}
+				if err := os.MkdirAll(destDir, os.ModePerm); err != nil {
+					fmt.Printf("    ✗ Failed to create directory: %v\n", err)
+					continue
+				}
+
+				// Assuming the first file is the correct one
+				if len(ver.Files) == 0 {
+					fmt.Printf("    ✗ No files found for version %s\n", ver.ID)
+					continue
+				}
+				downloadURL := ver.Files[0].URL
+				expectedFilename := ver.Files[0].Filename
+
+				fmt.Printf("    Downloading %s...\n", expectedFilename)
+				outPath, err := DownloadFile(downloadURL, destDir)
+				if err != nil {
+					fmt.Printf("    ✗ Download failed: %v\n", err)
+					continue
+				}
+				fmt.Printf("    ✓ Downloaded: %s\n", filepath.Base(outPath))
+
+				// Update state with new version ID and filename
+				packState[slug] = ModState{VersionID: ver.ID, Filename: filepath.Base(outPath)}
+				needsSave = true
+
+			} // End loop through mods
 
 			if needsSave {
 				if err := SaveState(stateFile, state); err != nil {
