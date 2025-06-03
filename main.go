@@ -24,7 +24,7 @@ var (
 	autoYes       bool
 	mcVersionFlag string // override MC version
 	loaderFlag    string // override loader
-	verbose       bool // enable verbose logging
+	verbose       bool   // enable verbose logging
 )
 
 func main() {
@@ -278,12 +278,33 @@ func main() {
 			if err := SaveConfig(cfgFile, cfg); err != nil {
 				return err
 			}
-			fmt.Printf("Deleted modpack %q\n", name)
-			// Also remove associated state and mods directory?
-			// state, _ := LoadState(stateFile)
-			// delete(state, name)
-			// SaveState(stateFile, state)
-			// os.RemoveAll(filepath.Join(modsDir, name))
+			fmt.Printf("Deleted modpack %q from config\n", name)
+
+			// --- Remove state entry ---
+			state, err := LoadState(stateFile)
+			if err != nil {
+				fmt.Printf("Warning: could not load state file: %v\n", err)
+			} else {
+				if _, ok := state[name]; ok {
+					delete(state, name)
+					if err := SaveState(stateFile, state); err != nil {
+						fmt.Printf("Warning: could not save updated state file: %v\n", err)
+					} else if verbose {
+						fmt.Printf("Removed state for %q\n", name)
+					}
+				} else if verbose {
+					fmt.Printf("No state found for %q\n", name)
+				}
+			}
+
+			// --- Remove mods directory ---
+			dir := filepath.Join(modsDir, name)
+			if err := os.RemoveAll(dir); err != nil {
+				fmt.Printf("Warning: failed to remove mods directory %s: %v\n", dir, err)
+			} else if verbose {
+				fmt.Printf("Removed mods directory %s\n", dir)
+			}
+
 			return nil
 		},
 	}
@@ -436,7 +457,7 @@ func main() {
 					continue
 				}
 
-				// --- Perform Download --- 
+				// --- Perform Download ---
 
 				// Remove old file ONLY if it exists AND the new filename is different
 				if fileExists && expectedFilePath != "" && modState.Filename != ver.Files[0].Filename {
@@ -490,7 +511,7 @@ func main() {
 
 	// check-updates
 	checkUpdatesCmd := &cobra.Command{
-		Use:   "check-updates [modpack]", // Renamed from "status"
+		Use:   "check-updates [modpack]",                                // Renamed from "status"
 		Short: "Check Modrinth for newer versions of mods in a modpack", // Updated description
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
