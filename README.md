@@ -16,6 +16,7 @@
 - Configuration validation on load
 - Verbose logging and automatic confirmation via `--yes`
 - Command aliases for faster workflows
+- Optional curses-based `dashboard` for interactive status viewing
 
 ## Prerequisites
 
@@ -71,6 +72,10 @@ Or download a prebuilt binary for your platform if available.
     # or use alias:
     # .\modpilot.exe clean MyPack
     ```
+9.  Launch the interactive dashboard:
+    ```pwsh
+    .\modpilot.exe dashboard
+    ```
 
 ## Commands
 
@@ -86,6 +91,7 @@ Or download a prebuilt binary for your platform if available.
 | `check-updates [pack]`       |                  | Check Modrinth for newer versions and check for missing local files         |
 | `update [pack]`              | `update-pack`, `upd` | Check & download new/missing versions for a modpack, updating state         |
 | `sync [pack]`                | `sync-pack`, `clean` | Remove JARs from the modpack's directory that aren't listed in `state.json` |
+| `dashboard`                  |                  | Interactive curses UI for viewing pack status |
 
 Global flags: `-c, --config`, `-s, --state`, `-m, --mods-dir`, `-y, --yes`, `-g, --mc-version` (override), `-l, --loader` (override), `-v, --verbose`.
 
@@ -162,6 +168,7 @@ Example: `mods/MyPack/fabric-api-0.100.0+1.21.5.jar`
 - `list-mods` (`lm`)
 - `update` (`update-pack`, `upd`)
 - `sync` (`sync-pack`, `clean`)
+- `dashboard`
 // Note: check-updates does not have an alias currently
 
 ## Contributing

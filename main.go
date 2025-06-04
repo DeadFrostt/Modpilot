@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/rivo/tview"
 	"github.com/spf13/cobra"
 )
 
@@ -670,6 +671,7 @@ func main() {
 		update,
 		checkUpdatesCmd,
 		syncCmd,
+		dashboardCmd,
 	)
 
 	if err := root.Execute(); err != nil {
@@ -683,5 +685,125 @@ func ternary(condition bool, trueVal, falseVal string) string {
 	if condition {
 		return trueVal
 	}
+
+	// dashboard
+	dashboardCmd := &cobra.Command{
+		Use:   "dashboard",
+		Short: "Launch interactive curses dashboard",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := LoadConfig(cfgFile)
+			if err != nil {
+				return err
+			}
+			state, err := LoadState(stateFile)
+			if err != nil {
+				return err
+			}
+
+			app := tview.NewApplication()
+			list := tview.NewList().ShowSecondaryText(false)
+			details := tview.NewTextView().SetDynamicColors(true)
+			details.SetBorder(true).SetTitle("Status")
+
+			for name, pack := range cfg.Modpacks {
+				n := name
+				p := pack
+				list.AddItem(name, "", 0, func() {
+					lines, err := checkUpdatesSummary(n, p, state[n])
+					if err != nil {
+						details.SetText(fmt.Sprintf("Error: %v", err))
+					} else {
+						details.SetText(strings.Join(lines, "\n"))
+					}
+					app.Draw()
+				})
+			}
+			list.SetBorder(true).SetTitle("Modpacks")
+
+			flex := tview.NewFlex().AddItem(list, 0, 1, true).AddItem(details, 0, 2, false)
+			return app.SetRoot(flex, true).Run()
+		},
+	}
 	return falseVal
+}
+
+// checkUpdatesSummary returns lines describing update status for a pack
+func checkUpdatesSummary(packName string, packCfg ModpackConfig, packState map[string]ModState) ([]string, error) {
+	gameVersion := packCfg.MCVersion
+	loader := packCfg.Loader
+	destDir := filepath.Join(modsDir, packName)
+	if packState == nil {
+		packState = make(map[string]ModState)
+	}
+	lines := []string{}
+	for _, slug := range packCfg.Mods {
+		modState, modInState := packState[slug]
+		fileExists := false
+		if modInState && modState.Filename != "" {
+			if _, err := os.Stat(filepath.Join(destDir, modState.Filename)); err == nil {
+				fileExists = true
+			}
+		}
+		ver, err := FetchLatestVersion(slug, gameVersion, loader)
+		if err != nil {
+			lines = append(lines, fmt.Sprintf("[red]✗ %s: %v[-]", slug, err))
+			continue
+		}
+		if !modInState {
+			lines = append(lines, fmt.Sprintf("[green]+ %s: latest %s[-]", slug, ver.ID))
+		} else if ver.ID != modState.VersionID {
+			missing := ""
+			if !fileExists {
+				missing = " (file missing!)"
+			}
+			lines = append(lines, fmt.Sprintf("[yellow]⚠ %s: %s → %s%s[-]", slug, modState.VersionID, ver.ID, missing))
+		} else if !fileExists {
+			lines = append(lines, fmt.Sprintf("[yellow]! %s: file missing for %s[-]", slug, ver.ID))
+		} else {
+			lines = append(lines, fmt.Sprintf("[blue]✓ %s: up to date (%s)[-]", slug, ver.ID))
+		}
+	}
+	return lines, nil
+}
+
+// updatePackNoPrompt downloads needed mods for a pack without prompting
+func updatePackNoPrompt(packName string, packCfg ModpackConfig, state State) error {
+	gameVersion := packCfg.MCVersion
+	loader := packCfg.Loader
+	if state[packName] == nil {
+		state[packName] = make(map[string]ModState)
+	}
+	packState := state[packName]
+	destDir := filepath.Join(modsDir, packName)
+	for _, slug := range packCfg.Mods {
+		modState, modInState := packState[slug]
+		fileExists := false
+		expectedPath := ""
+		if modInState && modState.Filename != "" {
+			expectedPath = filepath.Join(destDir, modState.Filename)
+			if _, err := os.Stat(expectedPath); err == nil {
+				fileExists = true
+			}
+		}
+		ver, err := FetchLatestVersion(slug, gameVersion, loader)
+		if err != nil {
+			return err
+		}
+		needsDownload := !modInState || ver.ID != modState.VersionID || !fileExists
+		if !needsDownload {
+			continue
+		}
+		if fileExists && expectedPath != "" && modState.Filename != ver.Files[0].Filename {
+			_ = os.Remove(expectedPath)
+		}
+		if len(ver.Files) == 0 {
+			continue
+		}
+		outPath, err := DownloadFile(ver.Files[0].URL, destDir)
+		if err != nil {
+			return err
+		}
+		packState[slug] = ModState{VersionID: ver.ID, Filename: filepath.Base(outPath)}
+	}
+	return SaveState(stateFile, state)
 }
